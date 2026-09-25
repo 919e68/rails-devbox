@@ -1,0 +1,8 @@
+# The home folder holds apps (with node_modules), keys and credentials. Never send it to the build.
+home/
+docs/
+tests/
+.devcontainer/
+.git/
+README.md
+.env

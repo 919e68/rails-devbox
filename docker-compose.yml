@@ -1,0 +1,93 @@
+name: rails-devbox
+
+services:
+  dev:
+    build:
+      context: .
+      args:
+        USER_UID: ${UID:-1000}
+        USER_GID: ${GID:-1000}
+    image: rails-devbox:latest
+    container_name: rails-devbox
+    hostname: rails-devbox
+    working_dir: /home/dev/apps
+    init: true
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      REDIS_URL: redis://redis:6379/0
+      SMTP_ADDRESS: mailpit
+      SMTP_PORT: "1025"
+      BINDING: "0.0.0.0"
+      # Badge in the prompt and the Claude Code status line; set in .env
+      BOX_NAME: ${BOX_NAME:-rails-devbox}
+      BOX_COLOR: ${BOX_COLOR:-blue}
+      # Taken from .env (or the shell) when set, so Claude Code starts logged in; left out otherwise
+      CLAUDE_CODE_OAUTH_TOKEN:
+      # Same for GitHub: gh reads it, and git over HTTPS uses it through gh (see Dockerfile)
+      GH_TOKEN:
+      # Jira / Confluence REST API access, also used tolog acli in (see entrypoint.sh)
+      ATLASSIAN_SITE:
+      ATLASSIAN_EMAIL:
+      ATLASSIAN_API_TOKEN:
+    volumes:
+      # Host ./home is the container user's home: apps/, .ssh/, .claude/, dotfiles
+      - ./home:/home/dev
+      # Installed Ruby/Node versions and their gems/packages survive rebuilds
+      - rbenv-versions:/opt/rbenv/versions
+      - nvm-versions:/opt/nvm/versions
+    ports:
+      - "127.0.0.1:3000-3005:3000-3005"   # Rails / Next.js
+      - "127.0.0.1:5173:5173"             # Vite
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+
+  postgres:
+    # Major version only (16, 17, 18): each major keeps its data in its own folder of the volume
+    image: postgres:${POSTGRES_VERSION:-18}
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      # The 18+ image default; set for every version so older ones also write into the named volume
+      PGDATA: /var/lib/postgresql/${POSTGRES_VERSION:-18}/docker
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    ports:
+      - "127.0.0.1:5433:5432"   # host 5432 is used by the local PostgreSQL service
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -h 127.0.0.1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:${REDIS_VERSION:-8}-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "127.0.0.1:8025:8025"   # web inbox
+    restart: unless-stopped
+
+volumes:
+  rbenv-versions:
+  nvm-versions:
+  postgres-data:
+  redis-data:

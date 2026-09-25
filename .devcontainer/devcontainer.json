@@ -1,0 +1,32 @@
+{
+  "name": "rails-devbox",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "dev",
+  "runServices": [
+    "dev",
+    "postgres",
+    "redis",
+    "mailpit"
+  ],
+  "workspaceFolder": "/home/dev/apps",
+  "remoteUser": "dev",
+  "overrideCommand": false,
+  "shutdownAction": "stopCompose",
+  "otherPortsAttributes": {
+    "onAutoForward": "ignore"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Shopify.ruby-lsp",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "anthropic.claude-code"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh"
+      }
+    }
+  }
+}

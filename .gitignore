@@ -1,0 +1,5 @@
+# Container user's home: apps (each has its own repo), SSH keys, Claude credentials
+home/
+docs/superpowers/
+tmp/
+.env
