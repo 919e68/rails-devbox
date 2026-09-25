@@ -1,0 +1,28 @@
+#!/bin/bash
+# Claude Code status line: box name badge (BOX_NAME on BOX_COLOR), model, directory, git branch, context used.
+input=$(cat)
+model=$(jq -r '.model.display_name // empty' <<<"$input")
+dir=$(jq -r '.workspace.current_dir // .cwd // empty' <<<"$input")
+pct=$(jq -r '.context_window.used_percentage // empty' <<<"$input" | cut -d. -f1)
+
+# Background escape for a Starship-style color: a name (blue, bright-red, ...) or #rrggbb
+bg() {
+  local names=(black red green yellow blue purple cyan white) i
+  for i in "${!names[@]}"; do
+    [ "$1" = "${names[$i]}" ] && { printf '\033[%sm' $((40 + i)); return; }
+    [ "$1" = "bright-${names[$i]}" ] && { printf '\033[%sm' $((100 + i)); return; }
+  done
+  if [[ $1 =~ ^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$ ]]; then
+    printf '\033[48;2;%d;%d;%dm' "0x${BASH_REMATCH[1]}" "0x${BASH_REMATCH[2]}" "0x${BASH_REMATCH[3]}"
+  else
+    printf '\033[44m'
+  fi
+}
+
+e=$'\033'
+out="$(bg "${BOX_COLOR:-blue}")$e[1;37m ${BOX_NAME:-rails-devbox} $e[0m"
+[ -n "$model" ] && out+=" $model"
+[ -n "$dir" ] && out+=" $e[36m${dir/#$HOME/\~}$e[0m"
+branch=$(git -C "${dir:-.}" symbolic-ref --short -q HEAD 2>/dev/null) && out+=" $e[35m$branch$e[0m"
+[ -n "$pct" ] && out+=" ${pct}% context"
+printf '%s\n' "$out"

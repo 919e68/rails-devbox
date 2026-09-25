@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Stop the dev box: the dev container and every service in docker-compose.override.yml.
+# home/, the database data and installed Ruby/Node versions are kept. bin/start brings it all back.
+#
+# Usage: bin/stop [--down]
+#   --down  also remove the containers and the network (volumes are kept); bin/start recreates them
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+down=0
+for arg in "$@"; do
+  case $arg in
+    --down) down=1 ;;
+    -h|--help) sed -n '2,7s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    *) echo "Unknown option: $arg (see bin/stop --help)" >&2; exit 2 ;;
+  esac
+done
+
+if [ $down -eq 1 ]; then
+  # Never -v: that would delete the database data and installed Ruby/Node versions
+  docker compose down --remove-orphans
+else
+  docker compose stop
+fi

@@ -1,0 +1,71 @@
+# The dev box's app ports and the services it uses: Postgres, Redis and Mailpit.
+# bin/start copies this file to docker-compose.override.yml on the first run. Docker Compose loads that copy
+# on top of docker-compose.yml on its own. The copy is gitignored, so change it freely: swap Postgres
+# for MySQL (see docker-compose.override.mysql.example.yml), add a service, or remove one.
+# Name new containers ${BOX_NAME:-rails-devbox}-<service> so two boxes on one machine do not clash.
+# After changing it: bin/start
+
+services:
+  dev:
+    # Ports for your apps, on this machine's 127.0.0.1 only. Add or change them here, for example
+    # "127.0.0.1:4000:4000" for another app. The host side (left) must be free on this machine.
+    ports:
+      - "127.0.0.1:3000-3005:3000-3005"   # Rails / Next.js / Node
+      - "127.0.0.1:5173:5173"             # Vite
+    # Connection settings for the services below. rails new --database=postgresql works with no database.yml changes.
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      REDIS_URL: redis://redis:6379/0
+      SMTP_ADDRESS: mailpit
+      SMTP_PORT: "1025"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    # Major version only (16, 17, 18): each major keeps its data in its own folder of the volume
+    image: postgres:${POSTGRES_VERSION:-18}
+    container_name: ${BOX_NAME:-rails-devbox}-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      # The 18+ image default; set for every version so older ones also write into the named volume
+      PGDATA: /var/lib/postgresql/${POSTGRES_VERSION:-18}/docker
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    ports:
+      - "127.0.0.1:5433:5432"   # host 5432 is used by the local PostgreSQL service
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -h 127.0.0.1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:${REDIS_VERSION:-8}-alpine
+    container_name: ${BOX_NAME:-rails-devbox}-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit
+    container_name: ${BOX_NAME:-rails-devbox}-mailpit
+    ports:
+      - "127.0.0.1:8025:8025"   # web inbox
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:

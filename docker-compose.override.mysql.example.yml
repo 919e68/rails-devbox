@@ -1,0 +1,66 @@
+# MySQL instead of Postgres, with Redis, Mailpit and the same app ports. To use it:
+#   cp docker-compose.override.mysql.example.yml docker-compose.override.yml && bin/start
+# bin/start also removes the containers of services this file no longer lists (such as postgres).
+# The postgres-data volume is kept, so switching back finds the old data again.
+
+services:
+  dev:
+    # Ports for your apps, on this machine's 127.0.0.1 only. Add or change them here, for example
+    # "127.0.0.1:4000:4000" for another app. The host side (left) must be free on this machine.
+    ports:
+      - "127.0.0.1:3000-3005:3000-3005"   # Rails / Next.js / Node
+      - "127.0.0.1:5173:5173"             # Vite
+    # rails new --database=mysql (or trilogy) reads DB_HOST and logs in as root with no password,
+    # so db:create works with no database.yml changes
+    environment:
+      DB_HOST: mysql
+      REDIS_URL: redis://redis:6379/0
+      SMTP_ADDRESS: mailpit
+      SMTP_PORT: "1025"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:${MYSQL_VERSION:-8.4}
+    container_name: ${BOX_NAME:-rails-devbox}-mysql
+    environment:
+      # Local development only: root has no password, matching the Rails database.yml default
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "127.0.0.1:3307:3306"   # host 3306 is often used by a local MySQL
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+
+  redis:
+    image: redis:${REDIS_VERSION:-8}-alpine
+    container_name: ${BOX_NAME:-rails-devbox}-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit
+    container_name: ${BOX_NAME:-rails-devbox}-mailpit
+    ports:
+      - "127.0.0.1:8025:8025"   # web inbox
+    restart: unless-stopped
+
+volumes:
+  mysql-data:
+  redis-data:

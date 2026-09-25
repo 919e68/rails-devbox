@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Start the dev box: create .env and docker-compose.override.yml on the first run, start every service,
+# wait until the dev container is ready, then open zsh in it.
+#
+# Usage: bin/start [--build] [--no-shell] [--init]
+#   --build     rebuild the image first (after changing the Dockerfile, UID or GID)
+#   --no-shell  start and wait, but do not open a shell
+#   --init      only create the missing files; the dev container setup runs this before it starts
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+build=() shell=1 init_only=0
+for arg in "$@"; do
+  case $arg in
+    --build) build=(--build) ;;
+    --no-shell) shell=0 ;;
+    --init) init_only=1 ;;
+    -h|--help) sed -n '2,9s/^# \{0,1\}//p' "$0"; exit 0 ;;
+    *) echo "Unknown option: $arg (see bin/start --help)" >&2; exit 2 ;;
+  esac
+done
+
+if [ ! -f .env ]; then
+  cp .env.example .env
+  # Linux: match the container user to yours so files in home/ are owned by you.
+  # Docker Desktop (macOS, Windows) maps ownership itself, and macOS IDs clash with Ubuntu's, so keep 1000 there.
+  if [ "$(uname -s)" = Linux ]; then
+    sed -i "s/^UID=.*/UID=$(id -u)/; s/^GID=.*/GID=$(id -g)/" .env
+  fi
+  echo "Created .env from .env.example. Edit it to name the box or add tokens (see README, First-time setup)."
+fi
+
+if [ ! -f docker-compose.override.yml ]; then
+  cp docker-compose.override.example.yml docker-compose.override.yml
+  echo "Created docker-compose.override.yml (Postgres, Redis, Mailpit). Edit it to change the services."
+fi
+
+[ $init_only -eq 1 ] && exit 0
+
+# --remove-orphans drops containers of services taken out of docker-compose.override.yml
+docker compose up -d --remove-orphans ${build[@]+"${build[@]}"}
+
+# The entrypoint installs Claude Code on the first start, then hands over to `sleep infinity`
+echo -n "Waiting for the dev container to finish starting"
+for _ in $(seq 400); do
+  if docker compose exec -T dev pgrep -x sleep >/dev/null 2>&1; then
+    echo " ready."
+    break
+  fi
+  echo -n "."
+  sleep 1.5
+done
+if ! docker compose exec -T dev pgrep -x sleep >/dev/null 2>&1; then
+  echo
+  echo "The dev container is not ready after 10 minutes. Check: docker compose logs dev" >&2
+  exit 1
+fi
+
+docker compose ps
+
+if [ $shell -eq 1 ]; then
+  exec docker compose exec dev zsh
+fi

@@ -1,0 +1,7 @@
+# Default rails-devbox prompt: the box name badge, then Starship's usual modules.
+# The entrypoint fills in @BOX_COLOR@ from .env and writes the result to /tmp/devbox-starship.toml.
+format = "${env_var.BOX_NAME}$all"
+
+[env_var.BOX_NAME]
+format = "[ $env_value ]($style) "
+style = "bold fg:white bg:@BOX_COLOR@"
